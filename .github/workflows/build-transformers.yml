@@ -1,6 +1,9 @@
 name: Build Transformers for RISC-V
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
   schedule:
     - cron: "0 0 * * 1"  # Weekly on Mondays
