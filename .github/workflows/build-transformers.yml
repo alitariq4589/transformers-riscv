@@ -30,7 +30,11 @@ jobs:
             python3-pip \
             build-essential \
             git \
-            wget
+            wget \
+            rustup
+
+            rustup install stable
+            rustup default stable
 
       - name: Checkout repo
         uses: actions/checkout@v4
