@@ -37,7 +37,7 @@ jobs:
 
       - name: Setup Python environment
         run: |
-          python3.13 -m venv $GITHUB_WORKSPACE/venv
+          python3 -m venv $GITHUB_WORKSPACE/venv
           source $GITHUB_WORKSPACE/venv/bin/activate
           pip install --upgrade pip setuptools wheel build
 
