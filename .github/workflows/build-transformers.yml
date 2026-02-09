@@ -1,6 +1,9 @@
 name: Build Transformers for RISC-V
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
   schedule:
     - cron: "0 0 * * 1"  # Weekly on Mondays
@@ -34,7 +37,18 @@ jobs:
             build-essential \
             git \
             wget
-
+      
+      - name: Check environment
+        run: |
+          set -eux
+          uname -a
+          gcc --version
+          g++ --version
+          python3 --version
+          cmake --version
+          nproc
+          cat /etc/os-release
+      
       - name: Checkout repo
         uses: actions/checkout@v4
 
