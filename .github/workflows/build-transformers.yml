@@ -81,8 +81,8 @@ jobs:
           source $GITHUB_WORKSPACE/venv/bin/activate
           
           # Download and install PyTorch RISC-V wheel
-          wget https://github.com/alitariq4589/pytorch-riscv/releases/download/v2.10.0/pytorch-2.10.0a0+git449b176-cp313-cp313-linux_riscv64.whl
-          pip install pytorch-2.10.0a0+git449b176-cp313-cp313-linux_riscv64.whl
+          wget https://github.com/alitariq4589/pytorch-riscv/releases/download/v2.10.0/torch-2.10.0a0+git449b176-cp312-cp312-linux_riscv64.whl
+          pip install torch-2.10.0a0+git449b176-cp312-cp312-linux_riscv64.whl
 
       - name: Install build dependencies
         run: |
