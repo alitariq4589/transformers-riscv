@@ -1,0 +1,171 @@
+name: Build Transformers for RISC-V
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 0 * * 1"  # Weekly on Mondays
+
+jobs:
+  build:
+    runs-on: RISCV64
+    permissions:
+      contents: write
+    outputs:
+      tag_name: ${{ steps.get-latest-tag.outputs.tag_name }}
+      release_name: ${{ steps.get-version.outputs.release_name }}
+      asset_name: ${{ steps.get-version.outputs.asset_name }}
+      asset_path: ${{ steps.get-version.outputs.asset_path }}
+
+    steps:
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            python3.13 \
+            python3.13-dev \
+            python3.13-venv \
+            python3-pip \
+            build-essential \
+            git \
+            wget
+
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python environment
+        run: |
+          python3.13 -m venv $GITHUB_WORKSPACE/venv
+          source $GITHUB_WORKSPACE/venv/bin/activate
+          pip install --upgrade pip setuptools wheel build
+
+      - name: Check environment
+        run: |
+          set -eux
+          uname -a
+          source $GITHUB_WORKSPACE/venv/bin/activate
+          python --version
+          pip --version
+
+      - name: Clone transformers and checkout latest tag
+        id: get-latest-tag
+        run: |
+          set -eux
+          
+          # Configure Git for large repos
+          git config --global http.postBuffer 524288000
+          git config --global http.maxRequests 2
+          git config --global core.compression 0
+
+          rm -rf transformers
+          git clone --depth=1 --no-tags https://github.com/huggingface/transformers.git
+          cd transformers
+
+          # Fetch only tag references
+          git fetch --tags --depth=1
+
+          # Get latest release tag (v*)
+          LATEST_TAG=$(git tag -l "v*" | grep -v "rc" | sort -V | tail -n 1)
+          echo "Checking out $LATEST_TAG"
+
+          # Fetch and checkout that tag
+          git fetch --depth=1 origin tag $LATEST_TAG
+          git checkout FETCH_HEAD
+
+          echo "tag_name=$LATEST_TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Install PyTorch RISC-V wheel
+        run: |
+          source $GITHUB_WORKSPACE/venv/bin/activate
+          
+          # Download and install PyTorch RISC-V wheel
+          wget https://github.com/alitariq4589/pytorch-riscv/releases/download/v2.10.0/pytorch-2.10.0a0+git449b176-cp313-cp313-linux_riscv64.whl
+          pip install pytorch-2.10.0a0+git449b176-cp313-cp313-linux_riscv64.whl
+
+      - name: Install build dependencies
+        run: |
+          source $GITHUB_WORKSPACE/venv/bin/activate
+          cd transformers
+          
+          # Install minimal dependencies needed for building
+          pip install numpy packaging
+
+      - name: Build transformers wheel
+        run: |
+          source $GITHUB_WORKSPACE/venv/bin/activate
+          cd transformers
+          
+          # Build the wheel
+          python -m build --wheel
+
+      - name: Get version and set outputs
+        id: get-version
+        run: |
+          source $GITHUB_WORKSPACE/venv/bin/activate
+          cd transformers
+          
+          # Extract version from built wheel
+          WHEEL_FILE=$(ls dist/*.whl)
+          WHEEL_NAME=$(basename $WHEEL_FILE)
+          VERSION=$(echo $WHEEL_NAME | sed -n 's/transformers-\([^-]*\)-.*/\1/p')
+          
+          ASSET_NAME="transformers-${VERSION}-py3-none-linux_riscv64.whl"
+          ASSET_PATH="$GITHUB_WORKSPACE/${ASSET_NAME}"
+
+          # Copy wheel to workspace with standardized name
+          cp $WHEEL_FILE $ASSET_PATH
+
+          echo "release_name=Transformers ${VERSION} RISC-V" >> $GITHUB_OUTPUT
+          echo "asset_name=$ASSET_NAME" >> $GITHUB_OUTPUT
+          echo "asset_path=$ASSET_PATH" >> $GITHUB_OUTPUT
+
+      - name: Verify wheel
+        run: |
+          source $GITHUB_WORKSPACE/venv/bin/activate
+          pip install ${{ steps.get-version.outputs.asset_path }}
+          python -c "import transformers; print(f'Transformers version: {transformers.__version__}')"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.get-version.outputs.asset_name }}
+          path: ${{ steps.get-version.outputs.asset_path }}
+
+      - name: Create or push to tag
+        run: |
+          TAG=${{ steps.get-latest-tag.outputs.tag_name }}
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "✅ Tag $TAG already exists. Skipping tag creation." 
+          else
+            echo "🆕 Tag $TAG does not exist. Creating and pushing..."
+            git tag "$TAG"
+            git push origin "$TAG"
+          fi
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.get-latest-tag.outputs.tag_name }}
+          name: ${{ steps.get-version.outputs.release_name }}
+          files: ${{ steps.get-version.outputs.asset_path }}
+          body: |
+            ## Transformers RISC-V Build
+            
+            Python wheel for Hugging Face Transformers compiled for RISC-V architecture.
+            
+            **Installation:**
+            ```bash
+            # Install PyTorch for RISC-V first
+            pip install https://github.com/alitariq4589/pytorch-riscv/releases/download/v2.10.0/pytorch-2.10.0a0+git449b176-cp313-cp313-linux_riscv64.whl
+            
+            # Install Transformers
+            pip install ${{ steps.get-version.outputs.asset_name }}
+            ```
+            
+            **Requirements:**
+            - Python 3.13
+            - RISC-V 64-bit Linux
+            - PyTorch RISC-V (see link above)
