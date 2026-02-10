@@ -132,8 +132,11 @@ jobs:
           wget https://github.com/alitariq4589/pytorch-riscv/releases/download/v2.10.0/torch-2.10.0a0+git449b176-cp312-cp312-linux_riscv64.whl
           pip install torch-2.10.0a0+git449b176-cp312-cp312-linux_riscv64.whl
 
-      - name: Install build dependencies
+      - name: Install and build dependencies
         run: |
+          # Source Rust environment
+          source "$HOME/.cargo/env"
+          
           source $GITHUB_WORKSPACE/venv/bin/activate
           cd transformers
           
@@ -145,6 +148,10 @@ jobs:
           
           # Install any runtime dependencies needed for building
           pip install numpy packaging
+          
+          # Pre-build and install tokenizers to avoid rebuilding during verification
+          echo "Building tokenizers from source..."
+          pip install "tokenizers>=0.22.0,<=0.23.0"
           
           # If transformers has a requirements.txt for building, install it
           if [ -f requirements.txt ]; then
@@ -185,6 +192,9 @@ jobs:
 
       - name: Verify wheel
         run: |
+          # Source Rust environment (needed for building tokenizers dependency)
+          source "$HOME/.cargo/env"
+          
           source $GITHUB_WORKSPACE/venv/bin/activate
           pip install ${{ steps.get-version.outputs.asset_path }}
           python -c "import transformers; print(f'Transformers version: {transformers.__version__}')"
