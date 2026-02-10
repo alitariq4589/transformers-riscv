@@ -31,8 +31,44 @@ jobs:
             build-essential \
             git \
             wget \
-            cargo \
-            rustc
+            curl
+
+      - name: Install Rust with retries
+        run: |
+          # Function to install Rust with retries and exponential backoff
+          install_rust() {
+            local max_attempts=10
+            local attempt=1
+            local wait_time=5
+            
+            while [ $attempt -le $max_attempts ]; do
+              echo "Attempt $attempt of $max_attempts to install Rust..."
+              
+              # Download rustup with retries
+              if curl --retry 5 --retry-delay 5 --retry-max-time 60 \
+                   --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+                   | sh -s -- -y --default-toolchain stable; then
+                echo "✅ Rust installation successful!"
+                source "$HOME/.cargo/env"
+                rustc --version
+                cargo --version
+                return 0
+              fi
+              
+              echo "❌ Attempt $attempt failed"
+              if [ $attempt -lt $max_attempts ]; then
+                echo "Retrying in $wait_time seconds..."
+                sleep $wait_time
+                wait_time=$((wait_time * 2))  # Exponential backoff
+              fi
+              attempt=$((attempt + 1))
+            done
+            
+            echo "❌ Failed to install Rust after $max_attempts attempts"
+            return 1
+          }
+          
+          install_rust
 
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -55,6 +91,9 @@ jobs:
           source $GITHUB_WORKSPACE/venv/bin/activate
           python --version
           pip --version
+          
+          # Source Rust environment
+          source "$HOME/.cargo/env"
           cargo --version
           rustc --version
 
@@ -101,6 +140,9 @@ jobs:
           # Install all build dependencies from pyproject.toml
           pip install setuptools>=40.8.0 wheel
           
+          # Install maturin (needed for building tokenizers Rust components)
+          pip install maturin
+          
           # Install any runtime dependencies needed for building
           pip install numpy packaging
           
@@ -111,6 +153,9 @@ jobs:
 
       - name: Build transformers wheel
         run: |
+          # Source Rust environment
+          source "$HOME/.cargo/env"
+          
           source $GITHUB_WORKSPACE/venv/bin/activate
           cd transformers
           
