@@ -31,7 +31,8 @@ jobs:
             build-essential \
             git \
             wget \
-            curl
+            curl \
+            libopenblas-dev
 
       - name: Install Rust with retries
         run: |
