@@ -31,10 +31,8 @@ jobs:
             build-essential \
             git \
             wget \
-            rustup
-
-            rustup install stable
-            rustup default stable
+            cargo \
+            rustc
 
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -43,6 +41,11 @@ jobs:
         run: |
           python3 -m venv $GITHUB_WORKSPACE/venv
           source $GITHUB_WORKSPACE/venv/bin/activate
+          
+          # Configure pip for better network resilience
+          pip config set global.retries 10
+          pip config set global.timeout 60
+          
           pip install --upgrade pip setuptools wheel build
 
       - name: Check environment
@@ -52,6 +55,8 @@ jobs:
           source $GITHUB_WORKSPACE/venv/bin/activate
           python --version
           pip --version
+          cargo --version
+          rustc --version
 
       - name: Clone transformers and checkout latest tag
         id: get-latest-tag
@@ -109,8 +114,8 @@ jobs:
           source $GITHUB_WORKSPACE/venv/bin/activate
           cd transformers
           
-          # Build the wheel
-          python -m build --wheel
+          # Build the wheel without isolation to avoid network issues
+          python -m build --wheel --no-isolation
 
       - name: Get version and set outputs
         id: get-version
@@ -174,7 +179,7 @@ jobs:
             **Installation:**
             ```bash
             # Install PyTorch for RISC-V first
-            pip install https://github.com/alitariq4589/pytorch-riscv/releases/download/v2.10.0/pytorch-2.10.0a0+git449b176-cp313-cp313-linux_riscv64.whl
+            pip install https://github.com/alitariq4589/pytorch-riscv/releases/download/v2.10.0/torch-2.10.0a0+git449b176-cp312-cp312-linux_riscv64.whl
             
             # Install Transformers
             pip install ${{ steps.get-version.outputs.asset_name }}
